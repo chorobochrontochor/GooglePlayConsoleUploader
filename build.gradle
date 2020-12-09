@@ -1,0 +1,38 @@
+plugins {
+    id 'java-library'
+}
+
+apply plugin: 'java'
+apply plugin: 'idea'
+apply plugin: 'application'
+
+group 'chchch'
+version '0.0.1'
+
+mainClassName = 'chchch.GooglePlayConsoleUploader'
+sourceCompatibility = 1.8
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    compile group: 'com.google.apis', name: 'google-api-services-androidpublisher', version: 'v3-rev142-1.25.0'
+    compile group: 'com.google.auth', name: 'google-auth-library-oauth2-http', version: '0.21.1'
+}
+
+jar {
+    baseName = 'GooglePlayConsoleUploader'
+    version = version
+    manifest {
+        attributes(
+            'Implementation-Version': version,
+            'Implementation-Title': baseName,
+            'Class-Path': configurations.runtime.files.collect { "lib/$it.name" }.join(' '),
+            'Main-Class': 'chchch.GooglePlayConsoleUploader'
+        )
+    }
+    from {
+        configurations.compile.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+}

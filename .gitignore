@@ -1,3 +1,10 @@
+# Idea
+/.idea/
+
+# Osx
+.DS_Store
+
+# Gradle
 .gradle
 /build/
 
