@@ -77,10 +77,11 @@ public class GooglePlayConsoleUploader
             }
 
             System.out.print("Processing command line arguments...");
-            String serviceAccountKeyFile = getArgValue(args, "-serviceAccountKeyFile", false, "");
+            String serviceAccountKeyFile = getArgValue(args, "-serviceAccountKeyFile", false, null);
             int httpTimeout = Integer.parseInt(getArgValue(args, "-httpTimeout", true, "120"));
-            String packageName = getArgValue(args, "-packageName", false, "");
-            String aab = getArgValue(args, "-aab", false, "");
+            String packageName = getArgValue(args, "-packageName", false, null);
+            String aab = getArgValue(args, "-aab", true, null);
+            String apk = getArgValue(args, "-apk", true, null);
             Boolean ackBundleInstallationWarning = hasArg(args, "-ackBundleInstallationWarning");
             String deobfuscationFile = getArgValue(args, "-deobfuscationFile", true, null);
             int versionCode = 0;
@@ -105,11 +106,19 @@ public class GooglePlayConsoleUploader
             System.out.println(" - httpTimeout: " + httpTimeout);
             System.out.println(" - packageName: " + packageName);
             System.out.println(" - aab: " + aab);
+            System.out.println(" - apk: " + apk);
             System.out.println(" - ackBundleInstallationWarning: " + ackBundleInstallationWarning);
             System.out.println(" - deobfuscationFile: " + deobfuscationFile);
             System.out.println(" - deobfuscationFileType: " + deobfuscationFileType);
             System.out.println(" - versionCode: " + versionCode);
             System.out.println();
+
+            if (aab != null && apk != null) {
+                throw new Exception("Uploading aab and apk would result in conflict. Provide only one of following arguments: aab, apk");
+            }
+            if (aab == null && apk == null && deobfuscationFile == null) {
+                throw new Exception("Nothing to upload. Provide at least one of following arguments: aab, apk, deobfuscationFile");
+            }
 
             System.out.print("Loading service account credentials...");
             GoogleCredentials credentials = GoogleCredentials.fromStream(new FileInputStream(serviceAccountKeyFile)).createScoped(AndroidPublisherScopes.ANDROIDPUBLISHER);
@@ -127,20 +136,35 @@ public class GooglePlayConsoleUploader
             AppEdit appEdit = publisher.edits().insert(packageName, null).execute();
             System.out.println("Done. AppEdit: " + appEdit.getId());
 
-            System.out.print("Creating app input stream...");
-            AbstractInputStreamContent aabContent = new FileContent(ContentType, new File(aab));
-            System.out.println("Done.");
+            if (aab != null) {
+                System.out.print("Initializing aab input stream...");
+                AbstractInputStreamContent aabContent = new FileContent(ContentType, new File(aab));
+                System.out.println("Done.");
 
-            System.out.print("Uploading app to Google Play Console...");
-            AndroidPublisher.Edits.Bundles.Upload upload = publisher.edits().bundles().upload(packageName, appEdit.getId(), aabContent);
-            upload.setAckBundleInstallationWarning(ackBundleInstallationWarning);
-            upload.execute();
-            System.out.println("Done.");
+                System.out.print("Uploading aab to Google Play Console...");
+                AndroidPublisher.Edits.Bundles.Upload upload = publisher.edits().bundles().upload(packageName, appEdit.getId(), aabContent);
+                upload.setAckBundleInstallationWarning(ackBundleInstallationWarning);
+                upload.execute();
+                System.out.println("Done.");
+            }
+
+            if (apk != null) {
+                System.out.print("Initializing apk input stream...");
+                AbstractInputStreamContent apkContent = new FileContent(ContentType, new File(apk));
+                System.out.println("Done.");
+
+                System.out.print("Uploading apk to Google Play Console...");
+                AndroidPublisher.Edits.Apks.Upload upload = publisher.edits().apks().upload(packageName, appEdit.getId(), apkContent);
+                upload.execute();
+                System.out.println("Done.");
+            }
 
             if (deobfuscationFile != null) {
+                System.out.print("Initializing deobfuscation input stream...");
+                AbstractInputStreamContent deobfuscationFileContent = new FileContent(ContentType, new File(deobfuscationFile));
+                System.out.println("Done.");
                 System.out.print("Uploading deobfuscation file to Google Play Console...");
-                AbstractInputStreamContent nativeSymbolsContent = new FileContent(ContentType, new File(deobfuscationFile));
-                AndroidPublisher.Edits.Deobfuscationfiles.Upload nativeSymbolsUpload = publisher.edits().deobfuscationfiles().upload(packageName, appEdit.getId(), versionCode, deobfuscationFileType, nativeSymbolsContent);
+                AndroidPublisher.Edits.Deobfuscationfiles.Upload nativeSymbolsUpload = publisher.edits().deobfuscationfiles().upload(packageName, appEdit.getId(), versionCode, deobfuscationFileType, deobfuscationFileContent);
                 nativeSymbolsUpload.execute();
                 System.out.println("Done.");
             }
