@@ -8,11 +8,15 @@ import com.google.api.client.json.jackson2.JacksonFactory;
 import com.google.api.services.androidpublisher.AndroidPublisher;
 import com.google.api.services.androidpublisher.AndroidPublisherScopes;
 import com.google.api.services.androidpublisher.model.AppEdit;
+import com.google.api.services.androidpublisher.model.LocalizedText;
+import com.google.api.services.androidpublisher.model.Track;
+import com.google.api.services.androidpublisher.model.TrackRelease;
 import com.google.auth.http.HttpCredentialsAdapter;
 import com.google.auth.oauth2.GoogleCredentials;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 
 public class GooglePlayConsoleUploader
@@ -22,6 +26,10 @@ public class GooglePlayConsoleUploader
     public static String DeobfuscationFileType_NativeCode = "nativeCode";
     public static String DeobfuscationFileType_Proguard = "proguard";
     public static String DeobfuscationFileType_Unspecified = "deobfuscationFileTypeUnspecified";
+
+    public static String Track_Internal = "internal";
+    public static String TrackReleaseStatus_Completed = "completed";
+    public static String LocalizedText_enUS = "en-US";
 
     private static String getAppName()
     {
@@ -80,14 +88,13 @@ public class GooglePlayConsoleUploader
             String serviceAccountKeyFile = getArgValue(args, "-serviceAccountKeyFile", false, null);
             int httpTimeout = Integer.parseInt(getArgValue(args, "-httpTimeout", true, "120"));
             String packageName = getArgValue(args, "-packageName", false, null);
-            String aab = getArgValue(args, "-aab", true, null);
-            String apk = getArgValue(args, "-apk", true, null);
-            Boolean ackBundleInstallationWarning = hasArg(args, "-ackBundleInstallationWarning");
+            Long versionCode = Long.parseLong(getArgValue(args, "-versionCode", false, ""));
+            String aabFile = getArgValue(args, "-aabFile", true, null);
+            String apkFile = getArgValue(args, "-apkFile", true, null);
+            boolean ackBundleInstallationWarning = hasArg(args, "-ackBundleInstallationWarning");
             String deobfuscationFile = getArgValue(args, "-deobfuscationFile", true, null);
-            int versionCode = 0;
             String deobfuscationFileType = DeobfuscationFileType_Unspecified;
             if (deobfuscationFile != null) {
-                versionCode = Integer.parseInt(getArgValue(args, "-versionCode", false, ""));
                 deobfuscationFileType = getArgValue(args, "-deobfuscationFileType", true, DeobfuscationFileType_Unspecified);
 
                 ArrayList<String> list = new ArrayList<>();
@@ -98,6 +105,11 @@ public class GooglePlayConsoleUploader
                     throw new Exception("Unknown deobfuscationFileType value \"" + deobfuscationFileType + "\". Available values: " + String.join(", ", list));
                 }
             }
+            boolean releaseToInternalTrack = hasArg(args, "-releaseToInternalTrack");
+            String releaseNotesFile = null;
+            if (releaseToInternalTrack) {
+                releaseNotesFile = getArgValue(args, "-releaseNotesFile", true, null);
+            }
             System.out.println("Done.");
 
             System.out.println();
@@ -105,18 +117,20 @@ public class GooglePlayConsoleUploader
             System.out.println(" - serviceAccountKeyFile: *****");
             System.out.println(" - httpTimeout: " + httpTimeout);
             System.out.println(" - packageName: " + packageName);
-            System.out.println(" - aab: " + aab);
-            System.out.println(" - apk: " + apk);
+            System.out.println(" - versionCode: " + versionCode);
+            System.out.println(" - aabFile: " + aabFile);
+            System.out.println(" - apkFile: " + apkFile);
             System.out.println(" - ackBundleInstallationWarning: " + ackBundleInstallationWarning);
             System.out.println(" - deobfuscationFile: " + deobfuscationFile);
             System.out.println(" - deobfuscationFileType: " + deobfuscationFileType);
-            System.out.println(" - versionCode: " + versionCode);
+            System.out.println(" - releaseToInternalTrack: " + releaseToInternalTrack);
+            System.out.println(" - releaseNotesFile: " + releaseNotesFile);
             System.out.println();
 
-            if (aab != null && apk != null) {
+            if (aabFile != null && apkFile != null) {
                 throw new Exception("Uploading aab and apk would result in conflict. Provide only one of following arguments: aab, apk");
             }
-            if (aab == null && apk == null && deobfuscationFile == null) {
+            if (aabFile == null && apkFile == null && deobfuscationFile == null) {
                 throw new Exception("Nothing to upload. Provide at least one of following arguments: aab, apk, deobfuscationFile");
             }
 
@@ -136,9 +150,9 @@ public class GooglePlayConsoleUploader
             AppEdit appEdit = publisher.edits().insert(packageName, null).execute();
             System.out.println("Done. AppEdit: " + appEdit.getId());
 
-            if (aab != null) {
+            if (aabFile != null) {
                 System.out.print("Initializing aab input stream...");
-                AbstractInputStreamContent aabContent = new FileContent(ContentType, new File(aab));
+                AbstractInputStreamContent aabContent = new FileContent(ContentType, new File(aabFile));
                 System.out.println("Done.");
 
                 System.out.print("Uploading aab to Google Play Console...");
@@ -148,9 +162,9 @@ public class GooglePlayConsoleUploader
                 System.out.println("Done.");
             }
 
-            if (apk != null) {
+            if (apkFile != null) {
                 System.out.print("Initializing apk input stream...");
-                AbstractInputStreamContent apkContent = new FileContent(ContentType, new File(apk));
+                AbstractInputStreamContent apkContent = new FileContent(ContentType, new File(apkFile));
                 System.out.println("Done.");
 
                 System.out.print("Uploading apk to Google Play Console...");
@@ -164,8 +178,40 @@ public class GooglePlayConsoleUploader
                 AbstractInputStreamContent deobfuscationFileContent = new FileContent(ContentType, new File(deobfuscationFile));
                 System.out.println("Done.");
                 System.out.print("Uploading deobfuscation file to Google Play Console...");
-                AndroidPublisher.Edits.Deobfuscationfiles.Upload nativeSymbolsUpload = publisher.edits().deobfuscationfiles().upload(packageName, appEdit.getId(), versionCode, deobfuscationFileType, deobfuscationFileContent);
+                AndroidPublisher.Edits.Deobfuscationfiles.Upload nativeSymbolsUpload = publisher.edits().deobfuscationfiles().upload(packageName, appEdit.getId(), (int) (long) versionCode, deobfuscationFileType, deobfuscationFileContent);
                 nativeSymbolsUpload.execute();
+                System.out.println("Done.");
+            }
+
+            if (releaseToInternalTrack) {
+                System.out.print("Initializing internal track...");
+                Track track = new Track();
+                TrackRelease trackRelease = new TrackRelease();
+                if (releaseNotesFile != null) {
+                    File file = new File(releaseNotesFile);
+                    FileInputStream fis = new FileInputStream(file);
+                    byte[] data = new byte[(int) file.length()];
+                    fis.read(data);
+                    fis.close();
+
+                    String releaseNotesText = new String(data, StandardCharsets.UTF_8);
+                    LocalizedText localizedText = new LocalizedText();
+                    localizedText.setLanguage(LocalizedText_enUS);
+                    localizedText.setText(releaseNotesText);
+                    trackRelease.setReleaseNotes(new ArrayList<LocalizedText>() {{
+                        add(localizedText);
+                    }});
+                }
+                trackRelease.setVersionCodes(new ArrayList<Long>() {{
+                    add(versionCode);
+                }});
+                trackRelease.setStatus(TrackReleaseStatus_Completed);
+                track.setReleases(new ArrayList<TrackRelease>() {{
+                   add(trackRelease);
+                }});
+                System.out.println("Done.");
+                System.out.print("Updating internal track...");
+                publisher.edits().tracks().update(packageName, appEdit.getId(), Track_Internal, track).execute();
                 System.out.println("Done.");
             }
 
