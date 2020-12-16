@@ -63,4 +63,4 @@ Go to [API Access](https://play.google.com/console/api-access) section in *Googl
 ```
 
 ## Releases
-Latest release: [1.0.0](https://github.com/google/bundletool/releases)
+Latest release: [1.0.0](https://github.com/chorobochrontochor/GooglePlayConsoleUploader/releases)
