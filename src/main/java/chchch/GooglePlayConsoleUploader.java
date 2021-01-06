@@ -27,6 +27,8 @@ public class GooglePlayConsoleUploader
     public static String DeobfuscationFileType_Proguard = "proguard";
     public static String DeobfuscationFileType_Unspecified = "deobfuscationFileTypeUnspecified";
 
+    public static long DeobfuscationFile_SizeLimit = 314572800;
+
     public static String Track_Internal = "internal";
     public static String TrackReleaseStatus_Completed = "completed";
     public static String LocalizedText_enUS = "en-US";
@@ -94,8 +96,10 @@ public class GooglePlayConsoleUploader
             boolean ackBundleInstallationWarning = hasArg(args, "-ackBundleInstallationWarning");
             String deobfuscationFile = getArgValue(args, "-deobfuscationFile", true, null);
             String deobfuscationFileType = DeobfuscationFileType_Unspecified;
+            boolean skipDeobfuscationFileUploadWhenFileSizeLimitIsExceeded = false;
             if (deobfuscationFile != null) {
                 deobfuscationFileType = getArgValue(args, "-deobfuscationFileType", true, DeobfuscationFileType_Unspecified);
+                skipDeobfuscationFileUploadWhenFileSizeLimitIsExceeded = hasArg(args, "-skipDeobfuscationFileUploadWhenFileSizeLimitIsExceeded");
 
                 ArrayList<String> list = new ArrayList<>();
                 list.add(DeobfuscationFileType_NativeCode);
@@ -122,9 +126,14 @@ public class GooglePlayConsoleUploader
             System.out.println(" - apkFile: " + apkFile);
             System.out.println(" - ackBundleInstallationWarning: " + ackBundleInstallationWarning);
             System.out.println(" - deobfuscationFile: " + deobfuscationFile);
-            System.out.println(" - deobfuscationFileType: " + deobfuscationFileType);
+            if (deobfuscationFile != null) {
+                System.out.println(" - deobfuscationFileType: " + deobfuscationFileType);
+                System.out.println(" - skipDeobfuscationFileUploadWhenFileSizeLimitIsExceeded: " + skipDeobfuscationFileUploadWhenFileSizeLimitIsExceeded);
+            }
             System.out.println(" - releaseToInternalTrack: " + releaseToInternalTrack);
-            System.out.println(" - releaseNotesFile: " + releaseNotesFile);
+            if (releaseToInternalTrack) {
+                System.out.println(" - releaseNotesFile: " + releaseNotesFile);
+            }
             System.out.println();
 
             if (aabFile != null && apkFile != null) {
@@ -174,13 +183,28 @@ public class GooglePlayConsoleUploader
             }
 
             if (deobfuscationFile != null) {
-                System.out.print("Initializing deobfuscation input stream...");
-                AbstractInputStreamContent deobfuscationFileContent = new FileContent(ContentType, new File(deobfuscationFile));
+                System.out.print("Checking deobfuscation file size limit...");
+                File deobfuscationFileFile = new File(deobfuscationFile);
+                boolean fileSizeLimitIsExceeded = deobfuscationFileFile.length() >= DeobfuscationFile_SizeLimit;
+                if (fileSizeLimitIsExceeded) {
+                    System.out.print("Deobfuscation file size limit is exceeded! ");
+                    System.err.print("Deobfuscation file size limit is exceeded! ");
+
+                    if (skipDeobfuscationFileUploadWhenFileSizeLimitIsExceeded) {
+                        System.out.print("Skipping...! ");
+                    }
+                }
                 System.out.println("Done.");
-                System.out.print("Uploading deobfuscation file to Google Play Console...");
-                AndroidPublisher.Edits.Deobfuscationfiles.Upload nativeSymbolsUpload = publisher.edits().deobfuscationfiles().upload(packageName, appEdit.getId(), (int) (long) versionCode, deobfuscationFileType, deobfuscationFileContent);
-                nativeSymbolsUpload.execute();
-                System.out.println("Done.");
+
+                if (!fileSizeLimitIsExceeded || !skipDeobfuscationFileUploadWhenFileSizeLimitIsExceeded) {
+                    System.out.print("Initializing deobfuscation input stream...");
+                    AbstractInputStreamContent deobfuscationFileContent = new FileContent(ContentType, deobfuscationFileFile);
+                    System.out.println("Done.");
+                    System.out.print("Uploading deobfuscation file to Google Play Console...");
+                    AndroidPublisher.Edits.Deobfuscationfiles.Upload nativeSymbolsUpload = publisher.edits().deobfuscationfiles().upload(packageName, appEdit.getId(), (int) (long) versionCode, deobfuscationFileType, deobfuscationFileContent);
+                    nativeSymbolsUpload.execute();
+                    System.out.println("Done.");
+                }
             }
 
             if (releaseToInternalTrack) {
