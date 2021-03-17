@@ -94,20 +94,11 @@ public class GooglePlayConsoleUploader
             String aabFile = getArgValue(args, "-aabFile", true, null);
             String apkFile = getArgValue(args, "-apkFile", true, null);
             boolean ackBundleInstallationWarning = hasArg(args, "-ackBundleInstallationWarning");
-            String deobfuscationFile = getArgValue(args, "-deobfuscationFile", true, null);
-            String deobfuscationFileType = DeobfuscationFileType_Unspecified;
+            String nativeDebugSymbolsFile = getArgValue(args, "-nativeDebugSymbolsFile", true, null);
+            String reTraceMappingFile = getArgValue(args, "-reTraceMappingFile", true, null);
             boolean skipDeobfuscationFileUploadWhenFileSizeLimitIsExceeded = false;
-            if (deobfuscationFile != null) {
-                deobfuscationFileType = getArgValue(args, "-deobfuscationFileType", true, DeobfuscationFileType_Unspecified);
+            if (nativeDebugSymbolsFile != null || reTraceMappingFile != null) {
                 skipDeobfuscationFileUploadWhenFileSizeLimitIsExceeded = hasArg(args, "-skipDeobfuscationFileUploadWhenFileSizeLimitIsExceeded");
-
-                ArrayList<String> list = new ArrayList<>();
-                list.add(DeobfuscationFileType_NativeCode);
-                list.add(DeobfuscationFileType_Proguard);
-                list.add(DeobfuscationFileType_Unspecified);
-                if (!list.contains(deobfuscationFileType)) {
-                    throw new Exception("Unknown deobfuscationFileType value \"" + deobfuscationFileType + "\". Available values: " + String.join(", ", list));
-                }
             }
             boolean releaseToInternalTrack = hasArg(args, "-releaseToInternalTrack");
             String releaseNotesFile = null;
@@ -125,9 +116,9 @@ public class GooglePlayConsoleUploader
             System.out.println(" - aabFile: " + aabFile);
             System.out.println(" - apkFile: " + apkFile);
             System.out.println(" - ackBundleInstallationWarning: " + ackBundleInstallationWarning);
-            System.out.println(" - deobfuscationFile: " + deobfuscationFile);
-            if (deobfuscationFile != null) {
-                System.out.println(" - deobfuscationFileType: " + deobfuscationFileType);
+            System.out.println(" - nativeDebugSymbolsFile: " + nativeDebugSymbolsFile);
+            System.out.println(" - reTraceMappingFile: " + reTraceMappingFile);
+            if (nativeDebugSymbolsFile != null || reTraceMappingFile != null) {
                 System.out.println(" - skipDeobfuscationFileUploadWhenFileSizeLimitIsExceeded: " + skipDeobfuscationFileUploadWhenFileSizeLimitIsExceeded);
             }
             System.out.println(" - releaseToInternalTrack: " + releaseToInternalTrack);
@@ -139,8 +130,8 @@ public class GooglePlayConsoleUploader
             if (aabFile != null && apkFile != null) {
                 throw new Exception("Uploading aab and apk would result in conflict. Provide only one of following arguments: aab, apk");
             }
-            if (aabFile == null && apkFile == null && deobfuscationFile == null) {
-                throw new Exception("Nothing to upload. Provide at least one of following arguments: aab, apk, deobfuscationFile");
+            if (aabFile == null && apkFile == null && nativeDebugSymbolsFile == null && reTraceMappingFile == null) {
+                throw new Exception("Nothing to upload. Provide at least one of following arguments: aab, apk, nativeDebugSymbolsFile, reTraceMappingFile");
             }
 
             System.out.print("Loading service account credentials...");
@@ -182,13 +173,13 @@ public class GooglePlayConsoleUploader
                 System.out.println("Done.");
             }
 
-            if (deobfuscationFile != null) {
-                System.out.print("Checking deobfuscation file size limit...");
-                File deobfuscationFileFile = new File(deobfuscationFile);
-                boolean fileSizeLimitIsExceeded = deobfuscationFileFile.length() >= DeobfuscationFile_SizeLimit;
+            if (nativeDebugSymbolsFile != null) {
+                System.out.print("Checking native debug symbols file size limit...");
+                File nativeDebugSymbolsFileFile = new File(nativeDebugSymbolsFile);
+                boolean fileSizeLimitIsExceeded = nativeDebugSymbolsFileFile.length() >= DeobfuscationFile_SizeLimit;
                 if (fileSizeLimitIsExceeded) {
-                    System.out.print("Deobfuscation file size limit is exceeded! ");
-                    System.err.print("Deobfuscation file size limit is exceeded! ");
+                    System.out.print("Native debug symbols file size limit is exceeded! ");
+                    System.err.print("Native debug symbols file size limit is exceeded! ");
 
                     if (skipDeobfuscationFileUploadWhenFileSizeLimitIsExceeded) {
                         System.out.print("Skipping...! ");
@@ -197,12 +188,37 @@ public class GooglePlayConsoleUploader
                 System.out.println("Done.");
 
                 if (!fileSizeLimitIsExceeded || !skipDeobfuscationFileUploadWhenFileSizeLimitIsExceeded) {
-                    System.out.print("Initializing deobfuscation input stream...");
-                    AbstractInputStreamContent deobfuscationFileContent = new FileContent(ContentType, deobfuscationFileFile);
+                    System.out.print("Initializing native debug symbols file input stream...");
+                    AbstractInputStreamContent nativeDebugSymbolsFileContent = new FileContent(ContentType, nativeDebugSymbolsFileFile);
                     System.out.println("Done.");
-                    System.out.print("Uploading deobfuscation file to Google Play Console...");
-                    AndroidPublisher.Edits.Deobfuscationfiles.Upload nativeSymbolsUpload = publisher.edits().deobfuscationfiles().upload(packageName, appEdit.getId(), (int) (long) versionCode, deobfuscationFileType, deobfuscationFileContent);
+                    System.out.print("Uploading native debug symbols file to Google Play Console...");
+                    AndroidPublisher.Edits.Deobfuscationfiles.Upload nativeSymbolsUpload = publisher.edits().deobfuscationfiles().upload(packageName, appEdit.getId(), (int) (long) versionCode, DeobfuscationFileType_NativeCode, nativeDebugSymbolsFileContent);
                     nativeSymbolsUpload.execute();
+                    System.out.println("Done.");
+                }
+            }
+
+            if (reTraceMappingFile != null) {
+                System.out.print("Checking ReTrace mapping file size limit...");
+                File reTraceMappingFileFile = new File(reTraceMappingFile);
+                boolean fileSizeLimitIsExceeded = reTraceMappingFileFile.length() >= DeobfuscationFile_SizeLimit;
+                if (fileSizeLimitIsExceeded) {
+                    System.out.print("Native ReTrace mapping file size limit is exceeded! ");
+                    System.err.print("Native ReTrace mapping file size limit is exceeded! ");
+
+                    if (skipDeobfuscationFileUploadWhenFileSizeLimitIsExceeded) {
+                        System.out.print("Skipping...! ");
+                    }
+                }
+                System.out.println("Done.");
+
+                if (!fileSizeLimitIsExceeded || !skipDeobfuscationFileUploadWhenFileSizeLimitIsExceeded) {
+                    System.out.print("Initializing ReTrace mapping file input stream...");
+                    AbstractInputStreamContent reTraceMappingFileContent = new FileContent(ContentType, reTraceMappingFileFile);
+                    System.out.println("Done.");
+                    System.out.print("Uploading ReTrace mapping file to Google Play Console...");
+                    AndroidPublisher.Edits.Deobfuscationfiles.Upload reTraceMappingUpload = publisher.edits().deobfuscationfiles().upload(packageName, appEdit.getId(), (int) (long) versionCode, DeobfuscationFileType_Proguard, reTraceMappingFileContent);
+                    reTraceMappingUpload.execute();
                     System.out.println("Done.");
                 }
             }
