@@ -52,8 +52,8 @@ Go to [API Access](https://play.google.com/console/api-access) section in *Googl
 
 ###### Upload symbols and assign them to specified version
 ```bash
--deobfuscationFile "/path/to/app.symbols.zip"
--deobfuscationFileType "nativeCode" #One of [nativeCode | proguard | deobfuscationFileTypeUnspecified]
+-nativeDebugSymbolsFile "/path/to/app.symbols.zip" #Optional
+-reTraceMappingFile "/path/to/app.mapping.txt" #Optional
 -skipDeobfuscationFileUploadWhenFileSizeLimitIsExceeded #Must be set if you want to skip deobfuscation file upload which will probably fail. Limit is set to 300MB
 ```
 
@@ -64,4 +64,4 @@ Go to [API Access](https://play.google.com/console/api-access) section in *Googl
 ```
 
 ## Releases
-Latest release: [1.1.0](https://github.com/chorobochrontochor/GooglePlayConsoleUploader/releases)
+Latest release: [2.0.0](https://github.com/chorobochrontochor/GooglePlayConsoleUploader/releases)
